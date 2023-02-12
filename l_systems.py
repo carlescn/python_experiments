@@ -3,6 +3,7 @@ Implementation of L-systems to draw realistic looking plants
 (see: https://en.wikipedia.org/wiki/L-system)
 """
 
+import sys
 import asyncio
 
 import pygame
@@ -39,17 +40,27 @@ class Plant():
         for letter in self.array:
             match letter:
                 case "F":
-                    line_end = (xys[-1][0] - self.length * np.cos(np.deg2rad(angles[-1] + 90)),
-                                xys[-1][1] - self.length * np.sin(np.deg2rad(angles[-1] + 90)))
+                    # pylint:disable=invalid-name  # single letter x, y
+                    x = xys[-1][0] \
+                        - self.length * np.cos(np.deg2rad(angles[-1] + 90)) \
+                        + np.random.normal(0,0.03)
+                    y = xys[-1][1] \
+                        - self.length * np.sin(np.deg2rad(angles[-1] + 90)) \
+                        + np.random.normal(0,0.08)
+                    line_end = (x, y)
                     pygame.draw.line(SCREEN, self.stem_color, xys[-1], line_end, self.width)
                     xys[-1] = line_end
+
                 case "+":
                     angles[-1] += self.angle
+
                 case "-":
                     angles[-1] -= self.angle
+
                 case "[":
                     xys    += [xys[-1],]
                     angles += [angles[-1],]
+
                 case "]":
                     pygame.draw.circle(SCREEN, self.leave_color, xys[-1], 4)
                     xys.pop(-1)
@@ -62,13 +73,15 @@ async def main():
         for event in pygame.event.get():
             if event.type == pygame.QUIT:
                 pygame.quit()
+                sys.exit()
             if event.type == pygame.KEYDOWN:
                 plant.grow()
             if event.type == pygame.MOUSEBUTTONDOWN:
                 plant.grow()
+            if event.type == TIMER:
+                SCREEN.fill(pygame.Color("cadetblue1"))
+                plant.draw()
 
-        SCREEN.fill(pygame.Color("cadetblue1"))
-        plant.draw()
         pygame.display.flip()
         await asyncio.sleep(0)
 
@@ -77,8 +90,10 @@ if __name__=="__main__":
     pygame.init()
 
     pygame.display.set_caption("Snake")
-
     SCREEN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+
+    TIMER = pygame.USEREVENT
+    pygame.time.set_timer(TIMER, 100)
 
     plant = Plant()
 

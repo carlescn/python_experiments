@@ -4,7 +4,6 @@ Implementation of L-systems to draw realistic looking plants
 """
 
 import sys
-import asyncio
 
 import pygame
 import numpy as np
@@ -76,8 +75,7 @@ def print_fps():
     text = FONT.render(f"FPS: {int(CLOCK.get_fps())}", False, pygame.Color("black"))
     SCREEN.blit(text, (0,0))
 
-async def main():
-    """ Handle the game loop. """
+def main():
     plant = Plant(25, 3, 3, 3)
     while True:
         for event in pygame.event.get():
@@ -97,7 +95,6 @@ async def main():
         print_fps()
         pygame.display.flip()
         CLOCK.tick(60)
-        await asyncio.sleep(0)
 
 
 if __name__=="__main__":
@@ -109,5 +106,5 @@ if __name__=="__main__":
     TIMER  = pygame.USEREVENT
     pygame.time.set_timer(TIMER, 100)
 
-    asyncio.run(main())
+    main()
     

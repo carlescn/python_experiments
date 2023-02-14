@@ -3,53 +3,118 @@ Implementation of L-systems to draw realistic looking plants
 (see: https://en.wikipedia.org/wiki/L-system)
 """
 
-import sys
-
-import pygame
+import pygame as pg
 import numpy as np
 
 
 SCREEN_WIDTH  = 1080
 SCREEN_HEIGHT = 720
-ROTATE_90 = np.deg2rad(90)
+ROTATE_90 = np.deg2rad(90) # Compute it only one time
 
 
-class Plant():
-    def __init__(self, angle, length, width, leaves_size):
-        self.array = "X"
-        self.rules = {
+class App():
+    def __init__(self):
+        pg.init()
+        pg.display.set_caption("Snake")
+        self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
+        self.font   = pg.font.SysFont(None, 32)
+        self.clock  = pg.time.Clock()
+        self.timer  = pg.USEREVENT
+        pg.time.set_timer(self.timer, 100)
+
+        self.main()
+
+    def main(self):
+        plants = self.get_plants()
+
+        while True:
+            for event in pg.event.get():
+                if event.type == pg.QUIT:
+                    self.quit()
+                if event.type == pg.KEYDOWN:
+                    if event.key == pg.K_q:
+                        self.quit()
+                    else:
+                        self.grow_plants(plants)
+                if event.type == pg.MOUSEBUTTONDOWN:
+                    self.grow_plants(plants)
+                if event.type == self.timer:
+                    self.screen.fill(pg.Color("cadetblue1"))
+                    self.draw_plants(plants)
+
+            self.print_fps()
+            pg.display.flip()
+            self.clock.tick(60)
+
+    def quit(self):
+        pg.quit()
+
+    def get_plants(self):
+        # First plant
+        axiom = "X"
+        rules = {
             "X": "F-[[X]+X]+F[+FX]-X",
             "F": "FF"
         }
-        self.angle = np.deg2rad(angle)
-        self.length = length
-        self.width = width
-        self.leaves_size = leaves_size
-        self.stem_color  = pygame.Color("burlywood4")
-        self.leave_color = pygame.Color("springgreen4")
-        self.position = (SCREEN_WIDTH / 3, SCREEN_HEIGHT)
+        position = (self.screen.get_width() / 3, self.screen.get_height())
+        stem_color = pg.Color("burlywood4")
+        leaves_color = pg.Color("springgreen4")
+        plants = [Plant(axiom, rules, position, 25, 4, 3, stem_color, 4, leaves_color),]
+        # Define more plants here and append to plants
+        return plants
+
+    def grow_plants(self, plants):
+        for plant in plants:
+            plant.grow()
+
+    def draw_plants(self, plants):
+        for plant in plants:
+            plant.draw(self.screen)
+
+    def print_fps(self):
+        text = self.font.render(f"FPS: {int(self.clock.get_fps())}", False, pg.Color("black"))
+        self.screen.blit(text, (0,0))
+
+
+class Plant():
+    def __init__(
+        self, axiom: str, rules: dict,
+        position: tuple, angle_deg: float, length: float,
+        stem_width: int, stem_color: pg.Color,
+        leaves_size: int, leaves_color: pg.Color
+    ):
+        self.sentence = axiom
+        self.rules    = rules
+        self.position = position
+        self.angle    = np.deg2rad(angle_deg)
+        self.length   = length
+        self.stem_width   = stem_width
+        self.stem_color   = stem_color
+        self.leaves_size  = leaves_size
+        self.leaves_color = leaves_color
 
     def grow(self):
-        new_array = ""
-        for letter in self.array:
-            new_array += self.rules[letter] if letter in self.rules else letter
-        self.array = str(new_array)
+        new_sentence = ""
+        for letter in self.sentence:
+            new_sentence += self.rules[letter] if letter in self.rules else letter
+        self.sentence = str(new_sentence)
 
-    def draw(self):
+    def draw(self, surface):
         nodes = [{
             "x": self.position[0],
             "y": self.position[1],
             "angle": self.angle,
         },]
-        for letter in self.array:
+        for letter in self.sentence:
             node = nodes[-1]
             match letter:
                 case "F":
+                    # rotate 90 degrees so it grows vertically
                     theta = node["angle"] + ROTATE_90
                     line_start = (node["x"], node["y"])
                     line_end = (node["x"] - self.length * np.cos(theta) + np.random.normal(0,0.03),
                                 node["y"] - self.length * np.sin(theta) + np.random.normal(0,0.03))
-                    pygame.draw.line(SCREEN, self.stem_color, line_start, line_end, self.width)
+                    pg.draw.line(surface, self.stem_color, line_start, line_end, self.stem_width)
                     node["x"], node["y"] = line_end
 
                 case "+":
@@ -63,48 +128,10 @@ class Plant():
 
                 case "]":
                     position = (node["x"], node["y"])
-                    pygame.draw.circle(SCREEN, self.leave_color, position, self.leaves_size)
+                    pg.draw.circle(surface, self.leaves_color, position, self.leaves_size)
                     nodes.pop(-1)
 
 
-def quit_game():
-    pygame.quit()
-    sys.exit()
-
-def print_fps():
-    text = FONT.render(f"FPS: {int(CLOCK.get_fps())}", False, pygame.Color("black"))
-    SCREEN.blit(text, (0,0))
-
-def main():
-    plant = Plant(25, 3, 3, 3)
-    while True:
-        for event in pygame.event.get():
-            if event.type == pygame.QUIT:
-                quit_game()
-            if event.type == pygame.KEYDOWN:
-                if event.key == pygame.K_q:
-                    quit_game()
-                else:
-                    plant.grow()
-            if event.type == pygame.MOUSEBUTTONDOWN:
-                plant.grow()
-            if event.type == TIMER:
-                SCREEN.fill(pygame.Color("cadetblue1"))
-                plant.draw()
-
-        print_fps()
-        pygame.display.flip()
-        CLOCK.tick(60)
-
-
 if __name__=="__main__":
-    pygame.init()
-    pygame.display.set_caption("Snake")
-    SCREEN = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-    FONT   = pygame.font.SysFont(None, 32)
-    CLOCK  = pygame.time.Clock()
-    TIMER  = pygame.USEREVENT
-    pygame.time.set_timer(TIMER, 100)
-
-    main()
+    App()
     

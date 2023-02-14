@@ -92,44 +92,45 @@ class Plant():
         self.stem_color   = stem_color
         self.leaves_size  = leaves_size
         self.leaves_color = leaves_color
+        self.lines = None
 
     def grow(self):
         new_sentence = ""
         for letter in self.sentence:
             new_sentence += self.rules[letter] if letter in self.rules else letter
         self.sentence = str(new_sentence)
+        self.update_lines()
 
-    def draw(self, surface):
-        nodes = [{
-            "x": self.position[0],
-            "y": self.position[1],
-            "angle": self.angle,
-        },]
+    def update_lines(self):
+        angle = self.angle
+        line  = [self.position,]
+        self.lines = []
+        nodes = []
         for letter in self.sentence:
-            node = nodes[-1]
             match letter:
                 case "F":
                     # rotate 90 degrees so it grows vertically
-                    theta = node["angle"] + ROTATE_90
-                    line_start = (node["x"], node["y"])
-                    line_end = (node["x"] - self.length * np.cos(theta) + np.random.normal(0,0.03),
-                                node["y"] - self.length * np.sin(theta) + np.random.normal(0,0.03))
-                    pg.draw.line(surface, self.stem_color, line_start, line_end, self.stem_width)
-                    node["x"], node["y"] = line_end
-
+                    theta = angle + ROTATE_90
+                    line_end = (line[-1][0] - self.length * np.cos(theta),
+                                line[-1][1] - self.length * np.sin(theta))
+                    line.append(line_end)
                 case "+":
-                    node["angle"] += self.angle
-
+                    angle += self.angle
                 case "-":
-                    node["angle"] -= self.angle
-
+                    angle -= self.angle
                 case "[":
-                    nodes.append(node.copy())
-
+                    nodes.append((line[-1], angle))
                 case "]":
-                    position = (node["x"], node["y"])
-                    pg.draw.circle(surface, self.leaves_color, position, self.leaves_size)
-                    nodes.pop(-1)
+                    if len(line) > 1:
+                        self.lines.append(line)
+                    line, angle = nodes.pop(-1)
+                    line = [line,]
+
+    def draw(self, surface):
+        if self.lines is not None:
+            for line in self.lines:
+                pg.draw.lines(surface, self.stem_color, False, line, self.stem_width)
+                pg.draw.circle(surface, self.leaves_color, line[-1], self.leaves_size)
 
 
 if __name__=="__main__":

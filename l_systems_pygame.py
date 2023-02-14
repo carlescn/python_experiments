@@ -59,7 +59,7 @@ class App():
         position = (self.screen.get_width() / 3, self.screen.get_height())
         stem_color = pg.Color("burlywood4")
         leaves_color = pg.Color("springgreen4")
-        plants = [Plant(axiom, rules, position, 25, 4, 3, stem_color, 4, leaves_color),]
+        plants = [Plant(axiom, rules, position, 25, 2, 3, stem_color, 4, leaves_color),]
         # Define more plants here and append to plants
         return plants
 
@@ -130,7 +130,9 @@ class Plant():
         if self.lines is not None:
             for line in self.lines:
                 pg.draw.lines(surface, self.stem_color, False, line, self.stem_width)
-                pg.draw.circle(surface, self.leaves_color, line[-1], self.leaves_size)
+            for line in self.lines[::2]:  # comment to draw all leaves, overlapped with the stems
+                leave_pos = line[-1] + np.random.normal(0, 0.5, 2)
+                pg.draw.circle(surface, self.leaves_color, leave_pos, self.leaves_size)
 
 
 if __name__=="__main__":

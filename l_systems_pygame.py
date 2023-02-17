@@ -15,7 +15,7 @@ ROTATE_90 = np.deg2rad(90) # Compute it only one time
 class App():
     def __init__(self):
         pg.init()
-        pg.display.set_caption("Snake")
+        pg.display.set_caption("L-Systems experiment")
         self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
         self.font   = pg.font.SysFont(None, 24)
         self.clock  = pg.time.Clock()

@@ -26,6 +26,7 @@ class App():
 
     def main(self):
         plants = self.get_plants()
+        iteration = 0
 
         while True:
             for event in pg.event.get():
@@ -36,13 +37,14 @@ class App():
                         self.quit()
                     else:
                         self.grow_plants(plants)
+                        iteration += 1
                 if event.type == pg.MOUSEBUTTONDOWN:
                     self.grow_plants(plants)
                 if event.type == self.timer:
                     self.screen.fill(pg.Color("cadetblue1"))
                     self.draw_plants(plants)
+                    self.print_info(iteration, *self.get_numbers(plants))
 
-            self.print_fps()
             pg.display.flip()
             self.clock.tick(60)
 
@@ -71,9 +73,25 @@ class App():
         for plant in plants:
             plant.draw(self.screen)
 
-    def print_fps(self):
-        text = self.font.render(f"FPS: {int(self.clock.get_fps())}", False, pg.Color("black"))
-        self.screen.blit(text, (0,0))
+    def get_numbers(self, plants):
+        number_lines, number_leaves = 0, 0
+        for plant in plants:
+            if plant.lines is None:
+                continue
+            for line in plant.lines:
+                number_lines  += len(line)
+                number_leaves += 1
+        return (number_lines, number_leaves)
+
+    def print_info(self, iteration, number_lines, number_leaves):
+        texts = []
+        texts.append(f"Iteration: {iteration}")
+        texts.append(f"Num. lines: {number_lines:,}")
+        texts.append(f"Num. leaves: {number_leaves:,}")
+        texts.append(f"FPS: {int(self.clock.get_fps())}")
+        for i, text in enumerate(texts):
+            rendered_text = self.font.render(text, True, pg.Color("black"))
+            self.screen.blit(rendered_text, (10, 10 + 25 * i))
 
 
 class Plant():

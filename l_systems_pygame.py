@@ -124,14 +124,17 @@ class Plant():
         line  = [self.position,]
         self.lines = []
         nodes = []
-        for letter in self.sentence:
+        for i, letter in enumerate(self.sentence):
             match letter:
                 case "F":
                     # rotate 90 degrees so it grows vertically
                     theta = angle + ROTATE_90
                     line_end = (line[-1][0] - self.length * np.cos(theta),
                                 line[-1][1] - self.length * np.sin(theta))
-                    line.append(line_end)
+                    if i > 0 and self.sentence[i-1] == "F":
+                        line[-1] = line_end
+                    else:
+                        line.append(line_end)
                 case "+":
                     angle += self.angle
                 case "-":

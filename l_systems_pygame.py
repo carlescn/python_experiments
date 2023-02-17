@@ -17,7 +17,7 @@ class App():
         pg.init()
         pg.display.set_caption("Snake")
         self.screen = pg.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
-        self.font   = pg.font.SysFont(None, 32)
+        self.font   = pg.font.SysFont(None, 24)
         self.clock  = pg.time.Clock()
         self.timer  = pg.USEREVENT
         pg.time.set_timer(self.timer, 100)
@@ -43,7 +43,7 @@ class App():
                 if event.type == self.timer:
                     self.screen.fill(pg.Color("cadetblue1"))
                     self.draw_plants(plants)
-                    self.print_info(iteration, *self.get_numbers(plants))
+                    self.print_info(iteration, plants)
 
             pg.display.flip()
             self.clock.tick(60)
@@ -74,24 +74,27 @@ class App():
             plant.draw(self.screen)
 
     def get_numbers(self, plants):
-        number_lines, number_leaves = 0, 0
+        sentences = lines = leaves = 0
         for plant in plants:
+            sentences += len(plant.sentence)
             if plant.lines is None:
                 continue
             for line in plant.lines:
-                number_lines  += len(line)
-                number_leaves += 1
-        return (number_lines, number_leaves)
+                lines  += len(line)
+                leaves += 1
+        return (sentences, lines, leaves)
 
-    def print_info(self, iteration, number_lines, number_leaves):
+    def print_info(self, iteration, plants):
+        sentence_length, number_lines, number_leaves = self.get_numbers(plants)
         texts = []
+        texts.append(f"FPS: {int(self.clock.get_fps())}")
         texts.append(f"Iteration: {iteration}")
         texts.append(f"Num. lines: {number_lines:,}")
         texts.append(f"Num. leaves: {number_leaves:,}")
-        texts.append(f"FPS: {int(self.clock.get_fps())}")
+        texts.append(f"Len. sentences: {sentence_length:,}")
         for i, text in enumerate(texts):
             rendered_text = self.font.render(text, True, pg.Color("black"))
-            self.screen.blit(rendered_text, (10, 10 + 25 * i))
+            self.screen.blit(rendered_text, (10, 10 + 20 * i))
 
 
 class Plant():

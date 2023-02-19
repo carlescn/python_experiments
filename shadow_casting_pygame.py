@@ -24,6 +24,25 @@ SCREEN_EDGES = (
     (SCREEN_BL, SCREEN_TL),
 )
 
+SHAPES = (
+    ((200, 200), (100, 300), (100, 150), (200, 200)),
+    ((150, 450), (100, 350), (250, 300), (150, 450)),
+    ((250, 150), (250,  50), (350,  50), (350, 150), (250, 150)),
+    ((450, 100), (550, 200)),
+    ((450, 200), (550, 100)),
+    ((250, 500), (450, 500), (450, 400), (350, 400), (250, 500)),
+    ((650, 500), (600, 500), (600, 455)),
+    ((600, 450), (600, 430)),
+    ((600, 425), (600, 405)),
+    ((600, 400), (600, 380)),
+    ((600, 375), (600, 355)),
+    ((600, 350), (600, 330)),
+    ((600, 325), (600, 305)),
+    ((600, 300), (600, 280)),
+    ((600, 275), (600, 250), (650, 250), (650, 100), (650,  50), (750,  50), (750, 450), (700, 500)),
+    ((700, 350), (700, 450), (650, 450), (650, 300), (700, 300), (700, 100)),
+)
+
 def compute_line_line_intersection(line1, line2):
     """
     Computes the intersection of two infinite lines defined by two points.
@@ -113,9 +132,8 @@ class Ray():
 
 
 class ShadowCaster():
-    def __init__(self, position, size, color):
+    def __init__(self, position, color):
         self.position = position
-        self.size = size
         self.color = color
         self.rays = []
         self.triangles = []
@@ -157,38 +175,36 @@ class ShadowCaster():
 
     def draw(self, surface):
         for triangle in self.triangles:
-            pg.draw.polygon(surface, pg.Color("yellow"), triangle)
-        for ray in self.rays:
-            ray.draw(surface)
-        pg.draw.circle(surface, self.color, self.position, self.size)
-
-
-class Line(): #TODO: change line for polygon
-    def __init__(self, color, start = None, end = None):
-        self.start = self.get_random_coord() if start is None else start
-        self.end   = self.get_random_coord() if end is None else end
-        self.color = color
-
-    def draw(self, surface):
-        pg.draw.line(surface, self.color, self.start, self.end)
-
-    #TODO: random line positions only for testing. Remove eventually.
-    def get_random_coord(self):
-        return (
-        np.random.randint(0, SCREEN_WIDTH),
-            np.random.randint(0, SCREEN_HEIGHT)
-        )
+            pg.draw.polygon(surface, self.color, triangle)
 
 
 class Game():
     def __init__(self):
-        self.cursor = ShadowCaster((0, 0), 8, pg.Color("white"))
-        self.lines  = [Line(pg.Color("white")) for _ in range(3)]
+        self.polygons = SHAPES
+        self.lines = self._get_lines(self.polygons)
+        self.ray_targets = self._get_ray_targets(self.lines)
+        self.cursor = ShadowCaster((0, 0), pg.Color("yellow"))
+
+    def _get_lines(self, polygons):
+        lines = list(SCREEN_EDGES)
+        for line in polygons:
+            if len(line) > 2:
+                for point1, point2 in zip(line, line[1:]):
+                    lines.append((point1, point2))
+            else:
+                lines.append(line)
+        return lines
+
+    def _get_ray_targets(self, lines):
+        points = [point for line in lines for point in line]
+        points += self.get_lines_intersections(lines)
+        return points
 
     def draw(self, surface):
-        for line in self.lines:
-            line.draw(surface)
         self.cursor.draw(surface)
+        for line in self.polygons:
+            pg.draw.lines(surface, pg.Color("white"), False, line, 3)
+        pg.draw.circle(surface, pg.Color("red"), pg.mouse.get_pos(), 8)
 
     def update(self):
         # Make sure cursor is inside the screen so all rays can find at least one intersection
@@ -197,13 +213,7 @@ class Game():
             return
 
         self.cursor.update_position(pg.mouse.get_pos())
-
-        lines = [(line.start, line.end) for line in self.lines]
-        lines += SCREEN_EDGES
-        points = [point for line in lines for point in line]
-        points += self.get_lines_intersections(lines)
-
-        self.cursor.update_triangles(lines, points)
+        self.cursor.update_triangles(self.lines, self.ray_targets)
 
     def get_lines_intersections(self, lines):
         #pylint:disable=invalid-name # (single letter x, y, t, u)
@@ -258,7 +268,7 @@ class App():
 
     def print_fps(self):
         text = f"FPS: {int(self.clock.get_fps())}"
-        rendered_text = self.font.render(text, True, pg.Color("white"))
+        rendered_text = self.font.render(text, True, pg.Color("red"))
         self.screen.blit(rendered_text, (10, 10))
 
 

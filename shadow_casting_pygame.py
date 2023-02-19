@@ -27,36 +27,49 @@ class Ray():
         self.end = (self.origin[0] - self.length * np.cos(self.theta),
                     self.origin[1] - self.length * np.sin(self.theta))
 
-    def compute_intersection(self, line):
+    def compute_ray_section_intersection(self, line_start, line_end):
+        """Compute intersection between ray (self) and passed line section."""
         #pylint:disable=invalid-name # (single letter x, y, t, u)
         x_1, y_1 = self.origin
         x_2, y_2 = self.end
-        x_3, y_3 = line.start
-        x_4, y_4 = line.end
+        x_3, y_3 = line_start
+        x_4, y_4 = line_end
 
         # If lines are parallel (no intersection), denominator is zero
         denominator = (x_1 - x_2)*(y_3 - y_4) - (y_1 - y_2)*(x_3 - x_4)
         if denominator == 0:
-            return None
-        t = ((x_1 - x_3)*(y_3 - y_4) - (y_1- y_3)*(x_3 - x_4)) / denominator
-        u = ((x_1 - x_3)*(y_1 - y_2) - (y_1- y_3)*(x_1 - x_2)) / denominator
+            raise ZeroDivisionError("No intersection")
 
-        if 0 < u < 1 and 0 < t:
-            x = x_1 + t * (x_2 - x_1)
-            y = y_1 + t * (y_2 - y_1)
-            return {"x": x, "y": y, "t": t}
-        else:
-            return None
+        t = ((x_1 - x_3) * (y_3 - y_4) - (y_1 - y_3) * (x_3 - x_4)) / denominator
+        u = ((x_1 - x_3) * (y_1 - y_2) - (y_1 - y_3) * (x_1 - x_2)) / denominator
 
-    def get_first_intersection(self, lines):
-        #pylint:disable=invalid-name # (single letter x, y, t, u)
-        t = np.Infinity
+        if not 0 < u < 1:
+            raise ValueError("Intersection outside section")
+        if t < 0:
+            raise ValueError("Intersection in opposite direction of ray")
+
+        x = x_1 + t * (x_2 - x_1)
+        y = y_1 + t * (y_2 - y_1)
+
+        return x, y, t
+
+    def get_closest_intersection(self, lines):
+        #pylint:disable=invalid-name # (single letter x, y)
+        closest = np.Infinity
         intersection = None
-        for line in lines:
-            result = self.compute_intersection(line)
-            if result is not None and result["t"] < t:
-                t = result["t"]
-                intersection = (result["x"],result["y"])
+        for line_start, line_end in lines:
+            try:
+                x, y, distance = self.compute_ray_section_intersection(line_start, line_end)
+                if distance < closest:
+                    closest = distance
+                    intersection = (x, y)
+            except ValueError:
+                # Intersection outside ray / section
+                pass
+            except ZeroDivisionError:
+                # No intersection
+                pass
+
         #TODO: return intersection and remove all this:
         if intersection is None:
             self.intersection = None
@@ -68,6 +81,7 @@ class Ray():
 
     def draw(self, surface):
         pg.draw.aaline(surface, self.color, self.origin, self.end)
+        # TODO: remove this
         if self.intersection is not None:
             pg.draw.circle(surface, self.color, self.intersection, 5)
 
@@ -88,7 +102,7 @@ class ShadowCaster():
 
     def get_intersections(self, lines):
         for ray in self.rays:
-            ray.get_first_intersection(lines)
+            ray.get_closest_intersection(lines)
 
     def draw(self, surface):
         for ray in self.rays:
@@ -125,7 +139,8 @@ class Game():
 
     def update(self):
         self.cursor.update_position(pg.mouse.get_pos())
-        self.cursor.get_intersections(self.lines)
+        lines = [(line.start, line.end) for line in self.lines]
+        self.cursor.get_intersections(lines)
 
 
 class App():

@@ -11,16 +11,28 @@ SCREEN_HEIGHT = 600
 TARGET_FPS    = 60
 TIMER_MS      = 100
 
+SCREEN_TL = (0, 0)
+SCREEN_TR = (SCREEN_WIDTH, 0)
+SCREEN_BL = (0, SCREEN_HEIGHT)
+SCREEN_BR = (SCREEN_WIDTH, SCREEN_HEIGHT)
+
+SCREEN_CORNERS = (SCREEN_TL, SCREEN_TR, SCREEN_BL, SCREEN_BR)
+SCREEN_EDGES = (
+    (SCREEN_TL, SCREEN_TR),
+    (SCREEN_TR, SCREEN_BR),
+    (SCREEN_BR, SCREEN_BL),
+    (SCREEN_BL, SCREEN_TL),
+)
+
 
 class Ray():
-    def __init__(self, origin, angle):
+    def __init__(self, origin, angle, degrees = False):
         self.color = pg.Color("yellow")
         self.length = SCREEN_WIDTH #TODO: change to intersection with edge of screen?
-        self.theta = np.deg2rad(angle)
+        self.theta = np.deg2rad(angle) if degrees else angle
         self.origin = None
         self.end = None
         self.update_position(origin)
-        self.intersection = None
 
     def update_position(self, origin):
         self.origin = origin
@@ -43,7 +55,10 @@ class Ray():
         t = ((x_1 - x_3) * (y_3 - y_4) - (y_1 - y_3) * (x_3 - x_4)) / denominator
         u = ((x_1 - x_3) * (y_1 - y_2) - (y_1 - y_3) * (x_1 - x_2)) / denominator
 
-        if not 0 < u < 1:
+        resolution = 1e-10
+        if line_start in SCREEN_CORNERS or line_end in SCREEN_CORNERS:
+            resolution = -1 * resolution
+        if not 0 + resolution < u < 1 - resolution:
             raise ValueError("Intersection outside section")
         if t < 0:
             raise ValueError("Intersection in opposite direction of ray")
@@ -69,21 +84,10 @@ class Ray():
             except ZeroDivisionError:
                 # No intersection
                 pass
-
-        #TODO: return intersection and remove all this:
-        if intersection is None:
-            self.intersection = None
-            self.color = pg.Color("yellow")
-        else:
-            self.intersection = intersection
-            self.end = intersection
-            self.color = pg.Color("red")
+        return intersection
 
     def draw(self, surface):
         pg.draw.aaline(surface, self.color, self.origin, self.end)
-        # TODO: remove this
-        if self.intersection is not None:
-            pg.draw.circle(surface, self.color, self.intersection, 5)
 
 
 class ShadowCaster():
@@ -91,18 +95,27 @@ class ShadowCaster():
         self.position = position
         self.size = size
         self.color = color
-        self.rays = [Ray(self.position, 0),]
+        self.rays = []
 
     def update_position(self, position):
         self.position = position
-        for ray in self.rays:
-            #TODO: autorotation is only for testing. Remove this line eventually.
-            ray.theta = (ray.theta + np.pi / 180) % (2 * np.pi)
-            ray.update_position(position)
+
+    def cast_rays(self, points):
+        points = set(points)
+        x, y = self.position
+        angles = [np.arctan2(y - point[1], x - point[0]) for point in points]
+        angles.sort()
+        self.rays = [Ray(self.position, angle) for angle in angles]
 
     def get_intersections(self, lines):
         for ray in self.rays:
-            ray.get_closest_intersection(lines)
+            intersection = ray.get_closest_intersection(lines)
+            # TODO: color change is only for testing. Remove all this.
+            if intersection is not None:
+                ray.end = intersection
+                ray.color = pg.Color("red")
+            else:
+                ray.color = pg.Color("yellow")
 
     def draw(self, surface):
         for ray in self.rays:
@@ -139,8 +152,13 @@ class Game():
 
     def update(self):
         self.cursor.update_position(pg.mouse.get_pos())
+
         lines = [(line.start, line.end) for line in self.lines]
+        lines += SCREEN_EDGES
+        points = [point for line in lines for point in line]
+        self.cursor.cast_rays(points)
         self.cursor.get_intersections(lines)
+
 
 
 class App():

@@ -1,5 +1,5 @@
 """
-Implementation of 2D shadow casting based on line-line intersections
+Implementation of 2D shadow casting based on line-line intersections.
 """
 
 import pygame as pg
@@ -54,7 +54,7 @@ def compute_line_line_intersection(line1, line2):
 
 class Ray():
     def __init__(self, origin, angle, degrees = False):
-        self.color = pg.Color("yellow")
+        self.color = pg.Color("red")
         #TODO: length is only used to display ray while testing. Could be set to anything.
         self.length = SCREEN_WIDTH * 2
         self.theta = np.deg2rad(angle) if degrees else angle
@@ -75,20 +75,13 @@ class Ray():
             t: can be used to compare the distance of two points from the ray origin
         Raises:
             ZeroDivisionError: lines are parallel
-            ValueError: intersection is outside the expected bounds
         """
         #pylint:disable=invalid-name # (single letter x, y, t, u)
         try:
             x, y, t, u = compute_line_line_intersection((self.origin, self.end), line)
 
-            # Force intercept / miss to avoid weird behavior:
-            # If ray points to the edge of the screen, always intercept it
-            if line[0] not in SCREEN_CORNERS or line[1] not in SCREEN_CORNERS:
-                # If ray points to the ends of a line section, always miss it
-                error = 1e-10
-                if not 0 + error < u < 1 - error:
-                    raise ValueError("Intersection outside section")
-
+            if not 0 < u < 1:
+                raise ValueError("Intersection outside section")
             if t < 0:
                 raise ValueError("Intersection in opposite direction of ray")
 
@@ -116,7 +109,7 @@ class Ray():
         return intersection
 
     def draw(self, surface):
-        pg.draw.aaline(surface, self.color, self.origin, self.end)
+        pg.draw.line(surface, self.color, self.origin, self.end)
 
 
 class ShadowCaster():
@@ -125,29 +118,46 @@ class ShadowCaster():
         self.size = size
         self.color = color
         self.rays = []
+        self.triangles = []
 
     def update_position(self, position):
         self.position = position
 
     def cast_rays(self, points):
         #pylint:disable=invalid-name # (single letter x, y)
+        error = 1e-10
         points = set(points)
         x, y = self.position
-        angles = [np.arctan2(y - point[1], x - point[0]) for point in points]
+        angles = []
+        for point in points:
+            angle = np.arctan2(y - point[1], x - point[0])
+            angles += [angle - error, angle + error]
         angles.sort()
         self.rays = [Ray(self.position, angle) for angle in angles]
 
-    def get_intersections(self, lines):
+    def get_rays_intersections(self, lines):
+        intersections = []
         for ray in self.rays:
             intersection = ray.get_closest_intersection(lines)
-            #TODO: color change is only for testing. Remove all this.
-            if intersection is not None:
-                ray.end = intersection
-                ray.color = pg.Color("red")
-            else:
-                ray.color = pg.Color("yellow")
+            if intersection is None:
+                raise TypeError("Ray should at least intercept the edges of the screen")
+            intersections.append(intersection)
+        return intersections
+
+    def update_triangles(self, lines, points):
+        self.cast_rays(points)
+        vertices = self.get_rays_intersections(lines)
+        assert len(self.rays) == len(vertices)
+
+        #TODO: compute triangles
+        vertices.append(vertices[0])
+        self.triangles = []
+        for vert1, vert2 in zip(vertices, vertices[1:]):
+            self.triangles.append((self.position, vert1, vert2))
 
     def draw(self, surface):
+        for triangle in self.triangles:
+            pg.draw.polygon(surface, pg.Color("yellow"), triangle)
         for ray in self.rays:
             ray.draw(surface)
         pg.draw.circle(surface, self.color, self.position, self.size)
@@ -160,7 +170,7 @@ class Line(): #TODO: change line for polygon
         self.color = color
 
     def draw(self, surface):
-        pg.draw.aaline(surface, self.color, self.start, self.end)
+        pg.draw.line(surface, self.color, self.start, self.end)
 
     #TODO: random line positions only for testing. Remove eventually.
     def get_random_coord(self):
@@ -172,9 +182,8 @@ class Line(): #TODO: change line for polygon
 
 class Game():
     def __init__(self):
-        self.cursor = ShadowCaster(pg.mouse.get_pos(), 8, pg.Color("white"))
+        self.cursor = ShadowCaster((0, 0), 8, pg.Color("white"))
         self.lines  = [Line(pg.Color("white")) for _ in range(3)]
-        self.lines.append(Line(pg.Color("white"), (0, -100), (500, 500)))
 
     def draw(self, surface):
         for line in self.lines:
@@ -182,28 +191,28 @@ class Game():
         self.cursor.draw(surface)
 
     def update(self):
+        # Make sure cursor is inside the screen so all rays can find at least one intersection
+        cursor_x, cursor_y = pg.mouse.get_pos()
+        if not 0 < cursor_x < SCREEN_WIDTH or not 0 < cursor_y < SCREEN_HEIGHT:
+            return
+
         self.cursor.update_position(pg.mouse.get_pos())
 
         lines = [(line.start, line.end) for line in self.lines]
         lines += SCREEN_EDGES
         points = [point for line in lines for point in line]
-        points += self.get_lines_intersections()
-        self.cursor.cast_rays(points)
-        self.cursor.get_intersections(lines)
+        points += self.get_lines_intersections(lines)
 
-        print(len(self.cursor.rays))
+        self.cursor.update_triangles(lines, points)
 
-    def get_lines_intersections(self):
+    def get_lines_intersections(self, lines):
         #pylint:disable=invalid-name # (single letter x, y, t, u)
         intersections = []
-        lines = [(line.start, line.end) for line in self.lines]
         for i, line1 in enumerate(lines):
-            for line2 in [*lines[i:], *SCREEN_EDGES]:
+            for line2 in lines[i:]:
                 try:
                     x, y, t, u = compute_line_line_intersection(line1, line2)
-                    # If points in one end of a line section, always miss it
-                    error = 1e-10
-                    if 0 + error < t < 1 - error and 0 + error < u < 1 - error:
+                    if 0 < t < 1 and 0 < u < 1:
                         intersections.append((x, y))
                 except ZeroDivisionError:
                     pass

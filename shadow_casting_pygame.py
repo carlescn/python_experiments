@@ -74,17 +74,15 @@ def compute_line_line_intersection(line1, line2):
 class Ray():
     def __init__(self, origin, angle, degrees = False):
         self.color = pg.Color("red")
-        #TODO: length is only used to display ray while testing. Could be set to anything.
-        self.length = SCREEN_WIDTH * 2
         self.theta = np.deg2rad(angle) if degrees else angle
         self.origin = None
-        self.end = None
+        self.direction = None
         self.update_position(origin)
 
     def update_position(self, origin):
         self.origin = origin
-        self.end = (self.origin[0] - self.length * np.cos(self.theta),
-                    self.origin[1] - self.length * np.sin(self.theta))
+        self.direction = (self.origin[0] - np.cos(self.theta),
+                          self.origin[1] - np.sin(self.theta))
 
     def compute_ray_section_intersection(self, line):
         """
@@ -97,7 +95,7 @@ class Ray():
         """
         #pylint:disable=invalid-name # (single letter x, y, t, u)
         try:
-            x, y, t, u = compute_line_line_intersection((self.origin, self.end), line)
+            x, y, t, u = compute_line_line_intersection((self.origin, self.direction), line)
 
             if not 0 < u < 1:
                 raise ValueError("Intersection outside section")
@@ -127,18 +125,33 @@ class Ray():
                 pass
         return intersection
 
-    def draw(self, surface):
-        pg.draw.line(surface, self.color, self.origin, self.end)
-
 
 class ShadowCaster():
-    def __init__(self, position, color):
+    def __init__(self, position, size, color, alpha = 128):
         self.position = position
-        self.color = color
         self.rays = []
         self.triangles = []
+        self.image = self._get_image(size, color, alpha)
 
-    def update_position(self, position):
+    def _get_image(self, size, color, alpha):
+        img = pg.image.load("img/shadow_casting_radial.png").convert_alpha()
+        img = pg.transform.scale(img, (size, size))
+        surf = pg.Surface(img.get_size()).convert_alpha()
+        surf.set_alpha(alpha)
+        surf.fill(color)
+        surf.blit(img, (0, 0), None, pg.BLEND_RGBA_MULT)
+        return surf
+
+    def _get_rays_intersections(self, lines):
+        intersections = []
+        for ray in self.rays:
+            intersection = ray.get_closest_intersection(lines)
+            if intersection is None:
+                raise TypeError("Ray should at least intercept the edges of the screen")
+            intersections.append(intersection)
+        return intersections
+
+    def set_position(self, position):
         self.position = position
 
     def cast_rays(self, points):
@@ -153,29 +166,28 @@ class ShadowCaster():
         angles.sort()
         self.rays = [Ray(self.position, angle) for angle in angles]
 
-    def get_rays_intersections(self, lines):
-        intersections = []
-        for ray in self.rays:
-            intersection = ray.get_closest_intersection(lines)
-            if intersection is None:
-                raise TypeError("Ray should at least intercept the edges of the screen")
-            intersections.append(intersection)
-        return intersections
-
-    def update_triangles(self, lines, points):
-        self.cast_rays(points)
-        vertices = self.get_rays_intersections(lines)
+    def update_triangles(self, lines, targets):
+        self.cast_rays(targets)
+        vertices = self._get_rays_intersections(lines)
         assert len(self.rays) == len(vertices)
 
-        #TODO: compute triangles
-        vertices.append(vertices[0])
         self.triangles = []
+        vertices.append(vertices[0])
         for vert1, vert2 in zip(vertices, vertices[1:]):
             self.triangles.append((self.position, vert1, vert2))
 
     def draw(self, surface):
+        radial_light = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
+
+        light_center = self.position - np.divide(self.image.get_size(), 2)
+        radial_light.blit(self.image, light_center)
+
+        mask = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
         for triangle in self.triangles:
-            pg.draw.polygon(surface, self.color, triangle)
+            pg.draw.polygon(mask, pg.Color("white"), triangle)
+        radial_light.blit(mask, (0,0), None, pg.BLEND_RGBA_MULT)
+
+        surface.blit(radial_light, (0, 0), None, pg.BLEND_RGBA_ADD)
 
 
 class Map():
@@ -234,36 +246,13 @@ class Game():
     def __init__(self):
         self.map = Map(SHAPES)
         self.lights = self._get_lights()
-        self.cursor = ShadowCaster((0, 0), pg.Color("yellow"))
-        #TODO: put surface in ShadowCaster class.
-        self.layer_cursor = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
-        self.layer_cursor.set_alpha(128)
-        self.layer_cursor.set_colorkey((0, 0, 0))
-        self.layer_lights = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
-        self.layer_lights.set_alpha(64)
-        self.layer_lights.set_colorkey((0, 0, 0))
+        self.cursor = ShadowCaster((0, 0), 600, pg.Color("yellow"), 64)
 
     def _get_lights(self):
-        lights = [ShadowCaster((400, 300), pg.Color("white")),]
+        lights = [ShadowCaster((400, 300), 600, pg.Color("white"), 64),]
         for light in lights:
             light.update_triangles(self.map.lines, self.map.ray_targets)
         return lights
-
-    def draw(self, surface):
-        self.map.draw_background(surface)
-
-        self.layer_cursor.fill(pg.Color("black"))
-        self.cursor.draw(self.layer_cursor)
-        surface.blit(self.layer_cursor, (0, 0))
-
-        self.layer_lights.fill(pg.Color("black"))
-        for light in self.lights:
-            light.draw(self.layer_lights)
-            pg.draw.circle(surface, pg.Color("white"), light.position, 8)
-        surface.blit(self.layer_lights, (0, 0))
-
-        self.map.draw_lines(surface)
-        pg.draw.circle(surface, pg.Color("red"), pg.mouse.get_pos(), 8)
 
     def update(self):
         # Make sure cursor is inside the screen so all rays can find at least one intersection
@@ -271,8 +260,19 @@ class Game():
         if not 0 < cursor_x < SCREEN_WIDTH or not 0 < cursor_y < SCREEN_HEIGHT:
             return
 
-        self.cursor.update_position(pg.mouse.get_pos())
+        self.cursor.set_position(pg.mouse.get_pos())
         self.cursor.update_triangles(self.map.lines, self.map.ray_targets)
+
+    def draw(self, surface):
+        self.map.draw_background(surface)
+
+        for light in self.lights:
+            light.draw(surface)
+
+        self.cursor.draw(surface)
+
+        self.map.draw_lines(surface)
+        pg.draw.circle(surface, pg.Color("red"), pg.mouse.get_pos(), 8)
 
 
 class App():
@@ -303,7 +303,6 @@ class App():
                 #     pass
 
             self.game.update()
-            # self.screen.fill(pg.Color("black"))
             self.game.draw(self.screen)
             self.print_fps()
             pg.display.flip()

@@ -178,18 +178,21 @@ class ShadowCaster():
             pg.draw.polygon(surface, self.color, triangle)
 
 
-class Game():
-    def __init__(self):
-        self.cursor = ShadowCaster((0, 0), pg.Color("yellow"))
-        self.lights = [ShadowCaster((400, 300), pg.Color("white")),]
-        self.polygons = SHAPES
+class Map():
+    def __init__(self, shapes):
+        self.background = self._get_background()
+        self.polygons = shapes
         self.lines = self._get_lines(self.polygons)
         self.ray_targets = self._get_ray_targets(self.lines)
-        self.background = self._get_background()
-        self.layer_cursor = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
-        self.layer_cursor.set_alpha(128)
-        self.layer_lights = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
-        self.layer_lights.set_alpha(64)
+
+    def _get_background(self):
+        img = pg.image.load("img/shadow_casting_floor.png").convert()
+        img = pg.transform.scale(img, np.multiply(img.get_size(), 2))
+        background = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
+        for x in range(0, background.get_width(), img.get_width()):
+            for y in range(0, background.get_height(), img.get_height()):
+                background.blit(img, (x, y))
+        return background
 
     def _get_lines(self, polygons):
         lines = list(SCREEN_EDGES)
@@ -203,48 +206,10 @@ class Game():
 
     def _get_ray_targets(self, lines):
         points = [point for line in lines for point in line]
-        points += self.get_lines_intersections(lines)
+        points += self._get_lines_intersections(lines)
         return points
 
-    def _get_background(self):
-        img = pg.image.load("img/shadow_casting_floor.png").convert()
-        img = pg.transform.scale(img, np.multiply(img.get_size(), 2))
-        background = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
-        for x in range(0, background.get_width(), img.get_width()):
-            for y in range(0, background.get_height(), img.get_height()):
-                background.blit(img, (x, y))
-        return background
-
-    def draw(self, surface):
-        surface.blit(self.background, (0, 0))
-
-        self.layer_cursor.fill(pg.Color("black"))
-        self.cursor.draw(self.layer_cursor)
-        surface.blit(self.layer_cursor, (0, 0))
-
-        self.layer_lights.fill(pg.Color("black"))
-        for light in self.lights:
-            light.draw(self.layer_lights)
-            pg.draw.circle(surface, pg.Color("white"), light.position, 8)
-        surface.blit(self.layer_lights, (0, 0))
-
-        for line in self.polygons:
-            pg.draw.lines(surface, pg.Color("black"), False, line, 5)
-        pg.draw.circle(surface, pg.Color("red"), pg.mouse.get_pos(), 8)
-
-    def update(self):
-        # Make sure cursor is inside the screen so all rays can find at least one intersection
-        cursor_x, cursor_y = pg.mouse.get_pos()
-        if not 0 < cursor_x < SCREEN_WIDTH or not 0 < cursor_y < SCREEN_HEIGHT:
-            return
-
-        self.cursor.update_position(pg.mouse.get_pos())
-        self.cursor.update_triangles(self.lines, self.ray_targets)
-
-        for light in self.lights:
-            light.update_triangles(self.lines, self.ray_targets)
-
-    def get_lines_intersections(self, lines):
+    def _get_lines_intersections(self, lines):
         #pylint:disable=invalid-name # (single letter x, y, t, u)
         intersections = []
         for i, line1 in enumerate(lines):
@@ -256,6 +221,58 @@ class Game():
                 except ZeroDivisionError:
                     pass
         return set(intersections)
+
+    def draw_background(self, surface):
+        surface.blit(self.background, (0, 0))
+
+    def draw_lines(self, surface):
+        for line in self.polygons:
+            pg.draw.lines(surface, pg.Color("black"), False, line, 5)
+
+
+class Game():
+    def __init__(self):
+        self.map = Map(SHAPES)
+        self.lights = self._get_lights()
+        self.cursor = ShadowCaster((0, 0), pg.Color("yellow"))
+        #TODO: put surface in ShadowCaster class.
+        self.layer_cursor = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
+        self.layer_cursor.set_alpha(128)
+        self.layer_cursor.set_colorkey((0, 0, 0))
+        self.layer_lights = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
+        self.layer_lights.set_alpha(64)
+        self.layer_lights.set_colorkey((0, 0, 0))
+
+    def _get_lights(self):
+        lights = [ShadowCaster((400, 300), pg.Color("white")),]
+        for light in lights:
+            light.update_triangles(self.map.lines, self.map.ray_targets)
+        return lights
+
+    def draw(self, surface):
+        self.map.draw_background(surface)
+
+        self.layer_cursor.fill(pg.Color("black"))
+        self.cursor.draw(self.layer_cursor)
+        surface.blit(self.layer_cursor, (0, 0))
+
+        self.layer_lights.fill(pg.Color("black"))
+        for light in self.lights:
+            light.draw(self.layer_lights)
+            pg.draw.circle(surface, pg.Color("white"), light.position, 8)
+        surface.blit(self.layer_lights, (0, 0))
+
+        self.map.draw_lines(surface)
+        pg.draw.circle(surface, pg.Color("red"), pg.mouse.get_pos(), 8)
+
+    def update(self):
+        # Make sure cursor is inside the screen so all rays can find at least one intersection
+        cursor_x, cursor_y = pg.mouse.get_pos()
+        if not 0 < cursor_x < SCREEN_WIDTH or not 0 < cursor_y < SCREEN_HEIGHT:
+            return
+
+        self.cursor.update_position(pg.mouse.get_pos())
+        self.cursor.update_triangles(self.map.lines, self.map.ray_targets)
 
 
 class App():

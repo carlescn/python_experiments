@@ -192,12 +192,15 @@ class ShadowCaster():
 
 class Map():
     def __init__(self, shapes):
-        self.background = self._get_background()
         self.polygons = shapes
         self.lines = self._get_lines(self.polygons)
         self.ray_targets = self._get_ray_targets(self.lines)
 
+        self.background = self._get_background()
+        self.lights = self._get_fixed_lights()
+
     def _get_background(self):
+        #pylint:disable=invalid-name # (single letter x, y)
         img = pg.image.load("img/shadow_casting_floor.png").convert()
         img = pg.transform.scale(img, np.multiply(img.get_size(), 2))
         background = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT))
@@ -234,8 +237,28 @@ class Map():
                     pass
         return set(intersections)
 
-    def draw_background(self, surface):
+    def _get_fixed_lights(self):
+        size_big = 800
+        size_small = 300
+        alpha = 64
+        lights = [
+            ShadowCaster((400, 300), size_big,   pg.Color("white"), alpha),
+            ShadowCaster((740,  60), size_small, pg.Color("orange"), alpha),
+            ShadowCaster((740, 210), size_small, pg.Color("orange"), alpha),
+            ShadowCaster((740, 320), size_small, pg.Color("orange"), alpha),
+            ShadowCaster((740, 430), size_small, pg.Color("orange"), alpha),
+        ]
+
+        surf = pg.Surface((SCREEN_WIDTH, SCREEN_HEIGHT)).convert_alpha()
+        for light in lights:
+            light.update_triangles(self.lines, self.ray_targets)
+            light.draw(surf)
+
+        return surf
+
+    def draw_surface(self, surface):
         surface.blit(self.background, (0, 0))
+        surface.blit(self.lights, (0, 0), None, pg.BLEND_RGBA_ADD)
 
     def draw_lines(self, surface):
         for line in self.polygons:
@@ -245,14 +268,7 @@ class Map():
 class Game():
     def __init__(self):
         self.map = Map(SHAPES)
-        self.lights = self._get_lights()
-        self.cursor = ShadowCaster((0, 0), 600, pg.Color("yellow"), 64)
-
-    def _get_lights(self):
-        lights = [ShadowCaster((400, 300), 600, pg.Color("white"), 64),]
-        for light in lights:
-            light.update_triangles(self.map.lines, self.map.ray_targets)
-        return lights
+        self.cursor = ShadowCaster((0, 0), 600, pg.Color("gold"), 64)
 
     def update(self):
         # Make sure cursor is inside the screen so all rays can find at least one intersection
@@ -264,10 +280,7 @@ class Game():
         self.cursor.update_triangles(self.map.lines, self.map.ray_targets)
 
     def draw(self, surface):
-        self.map.draw_background(surface)
-
-        for light in self.lights:
-            light.draw(surface)
+        self.map.draw_surface(surface)
 
         self.cursor.draw(surface)
 
@@ -305,6 +318,7 @@ class App():
             self.game.update()
             self.game.draw(self.screen)
             self.print_fps()
+            # print(self.game.cursor.position)
             pg.display.flip()
             self.clock.tick(TARGET_FPS)
 
